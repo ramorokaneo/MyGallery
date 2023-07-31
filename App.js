@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
-import { ImagePicker } from 'expo-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import axios from 'axios';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SQLite from 'expo-sqlite';
+const pictures = ('./pictures');
 
 const SERVER_URL = 'http://your_backend_server_url:5000'; // Replace with your backend server URL
 const db = SQLite.openDatabase('uploads.db');
@@ -131,7 +132,7 @@ const App = () => {
   return (
     <View style={styles.container}>
       <FlatList
-        data={media}
+        data={pictures}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
         numColumns={3}
