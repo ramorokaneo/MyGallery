@@ -3,15 +3,29 @@ import { View, Text, Image, TouchableOpacity, FlatList, StyleSheet } from 'react
 import { ImagePicker } from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import axios from 'axios';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as SQLite from 'expo-sqlite';
 
 const SERVER_URL = 'http://your_backend_server_url:5000'; // Replace with your backend server URL
+const db = SQLite.openDatabase('uploads.db');
 
 const App = () => {
   const [media, setMedia] = useState([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {
+    createTable();
     getMedia();
   }, []);
+
+  const createTable = () => {
+    db.transaction((tx) => {
+      tx.executeSql(
+        'CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, filepath TEXT NOT NULL, upload_date TEXT NOT NULL);'
+      );
+    });
+  };
 
   const getMedia = async () => {
     const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -25,7 +39,28 @@ const App = () => {
       mediaType: [MediaLibrary.MediaType.photo, MediaLibrary.MediaType.video],
     });
 
-    setMedia(mediaAssets.assets);
+    const results = [];
+    for (const asset of mediaAssets.assets) {
+      const info = await getFileInfo(asset.uri);
+      results.push({ ...asset, ...info });
+    }
+
+    setMedia(results);
+  };
+
+  const getFileInfo = async (uri) => {
+    return new Promise((resolve) => {
+      db.transaction((tx) => {
+        tx.executeSql(
+          'SELECT * FROM files WHERE filepath = ?',
+          [uri],
+          (_, { rows }) => {
+            const result = rows.item(0);
+            resolve(result);
+          }
+        );
+      });
+    });
   };
 
   const handlePickMedia = async () => {
@@ -55,12 +90,23 @@ const App = () => {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         console.log('Upload successful. Server response:', response.data);
+
+        const uploadDate = new Date().toISOString();
+        db.transaction((tx) => {
+          tx.executeSql(
+            'INSERT INTO files (filename, filepath, upload_date) VALUES (?, ?, ?)',
+            [response.data.file, result.uri, uploadDate],
+            (_, { insertId }) => {
+              setMedia([...media, { ...result, upload_date: uploadDate, id: insertId }]);
+            },
+            (_, error) => {
+              console.error('Error inserting data into database:', error);
+            }
+          );
+        });
       } catch (error) {
         console.error('Error uploading media:', error);
       }
-
-      setMedia([...media, result]);
-      MediaLibrary.createAssetAsync(result.uri);
     }
   };
 
@@ -87,7 +133,7 @@ const App = () => {
       <FlatList
         data={media}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         numColumns={3}
         contentContainerStyle={styles.listContainer}
       />
