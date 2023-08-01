@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, Image, FlatList, StyleSheet } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, Image, FlatList, StyleSheet, Dimensions } from 'react-native';
 import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
@@ -10,13 +10,35 @@ const db = SQLite.openDatabase('mydatabase.db');
 
 const API_KEY = '4NvbKc0C2mimNP8lTUQtF01taGk7H2znVMCgDpLUGbctbqrpV2h2Jh0y';
 
+
+function useInterval(callback, delay) {
+  const savedCallback = useRef();
+
+  useEffect(() => {
+    savedCallback.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    function tick() {
+      savedCallback.current();
+    }
+
+    if (delay !== null) {
+      const id = setInterval(tick, delay);
+      return () => clearInterval(id);
+    }
+  }, [delay]);
+}
+
 export default function App() {
   const [selectedImages, setSelectedImages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCameraMode, setIsCameraMode] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(-1); // Index of selected image
   const cameraRef = useRef(null);
   const thumbnailListRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -100,13 +122,15 @@ export default function App() {
 
   const recordVideo = async () => {
     if (cameraRef.current) {
+      setIsRecording(true);
       const video = await cameraRef.current.recordAsync();
       saveMedia(video.uri, 'video');
     }
   };
 
   const stopRecordingVideo = async () => {
-    if (cameraRef.current) {
+    if (cameraRef.current && isRecording) {
+      setIsRecording(false);
       cameraRef.current.stopRecording();
     }
   };
@@ -145,19 +169,27 @@ export default function App() {
     thumbnailListRef.current.scrollToOffset({ offset: offsetY, animated: false });
   };
 
+  const selectImage = (index) => {
+    setSelectedImageIndex(index);
+  };
+
   const renderCamera = () => (
     <Camera style={styles.camera} type={Camera.Constants.Type.back} ref={cameraRef}>
-      <TouchableOpacity style={styles.captureButton} onPress={takePhoto}>
-        <Text style={styles.captureButtonText}>Take Photo</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.captureButton} onPress={recordVideo}>
-        <Text style={styles.captureButtonText}>Record Video</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.captureButton} onPress={stopRecordingVideo}>
-        <Text style={styles.captureButtonText}>Stop Recording</Text>
-      </TouchableOpacity>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={styles.captureButton} onPress={takePhoto}>
+          <Text style={styles.captureButtonText}>Take Photo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.captureButton} onPress={isRecording ? stopRecordingVideo : recordVideo}>
+          <Text style={styles.captureButtonText}>
+            {isRecording ? 'Stop Recording' : 'Record Video'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </Camera>
   );
+
+  const screenWidth = Dimensions.get('window').width;
+  const thumbnailWidth = screenWidth * 0.2; // Adjust this value as needed
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
@@ -167,14 +199,24 @@ export default function App() {
         <>
           <FlatList
             data={selectedImages}
-            renderItem={({ item }) => (
-              <View style={styles.imageContainer}>
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                style={[styles.imageContainer, { width: screenWidth, height: screenWidth }]}
+                onPress={() => selectImage(index)}
+              >
                 {item.type === 'photo' ? (
-                  <Image style={styles.image} source={{ uri: item.uri }} />
+                  <Image
+                    style={[
+                      styles.image,
+                      index === selectedImageIndex && styles.selectedImage,
+                      { width: '100%', height: '100%' },
+                    ]}
+                    source={{ uri: item.uri }}
+                  />
                 ) : (
                   <Text style={styles.videoText}>Video</Text>
                 )}
-              </View>
+              </TouchableOpacity>
             )}
             keyExtractor={(item) => item.id.toString()}
             ListEmptyComponent={<Text>No media found</Text>}
@@ -187,9 +229,12 @@ export default function App() {
             showsHorizontalScrollIndicator={false}
             data={selectedImages}
             renderItem={({ item }) => (
-              <TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.thumbnailContainer, { width: thumbnailWidth, height: thumbnailWidth }]}
+                onPress={() => selectImage(item.id)}
+              >
                 {item.type === 'photo' ? (
-                  <Image style={styles.thumbnail} source={{ uri: item.thumbnailUri }} />
+                  <Image style={[styles.thumbnail, { width: '100%', height: '100%' }]} source={{ uri: item.thumbnailUri }} />
                 ) : (
                   <Text style={styles.videoText}>Video</Text>
                 )}
@@ -228,22 +273,26 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     borderWidth: 1,
     borderColor: 'gray',
-    padding: 5,
   },
   image: {
-    height: 200,
-    width: '100%',
     resizeMode: 'cover',
+  },
+  selectedImage: {
+    borderWidth: 3,
+    borderColor: 'blue',
   },
   videoText: {
     fontSize: 20,
     textAlign: 'center',
-    marginTop: 90,
+    marginTop: '50%',
+  },
+  thumbnailContainer: {
+    margin: 5,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: 'gray',
   },
   thumbnail: {
-    width: 100,
-    height: 100,
-    margin: 5,
     borderRadius: 5,
   },
   button: {
@@ -259,5 +308,10 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
