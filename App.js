@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, Image, FlatList, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, Image, FlatList, StyleSheet, Dimensions, ImageBackground } from 'react-native';
 import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import axios from 'axios';
 import * as SQLite from 'expo-sqlite';
+import FlipCard from 'react-native-flip-card';
 
 const db = SQLite.openDatabase('mydatabase.db');
 
-const API_KEY = '4NvbKc0C2mimNP8lTUQtF01taGk7H2znVMCgDpLUGbctbqrpV2h2Jh0y';
+const API_KEY = 'YOUR_PIXELS_API_KEY';
 
-
+// Custom hook to run a function at a regular interval
 function useInterval(callback, delay) {
   const savedCallback = useRef();
 
@@ -35,10 +36,11 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [isCameraMode, setIsCameraMode] = useState(false);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(-1); // Index of selected image
+  const [selectedImageIndex, setSelectedImageIndex] = useState(-1);
   const cameraRef = useRef(null);
   const thumbnailListRef = useRef(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showLandingPage, setShowLandingPage] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -189,65 +191,93 @@ export default function App() {
   );
 
   const screenWidth = Dimensions.get('window').width;
-  const thumbnailWidth = screenWidth * 0.2; // Adjust this value as needed
+  const thumbnailWidth = screenWidth * 0.2;
+
+  // Function to fetch new images from Pixels API every 120 seconds
+  const fetchNewImages = () => {
+    fetchImages();
+  };
+
+  // Fetch new images every 120 seconds using the custom hook
+  useInterval(fetchNewImages, 120000);
+
+  const renderLandingPage = () => (
+    <ImageBackground
+      source={require('./assets/pexels-vitalina-12587261.jpg')}
+      style={styles.landingPageBackground}
+    >
+      <View style={styles.landingPageContainer}>
+        <Text style={styles.landingPageText}>Welcome to the Gallery</Text>
+        <TouchableOpacity style={styles.startButton} onPress={() => setShowLandingPage(false)}>
+          <Text style={styles.startButtonText}>Start</Text>
+        </TouchableOpacity>
+      </View>
+    </ImageBackground>
+  );
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      {isCameraMode ? (
-        renderCamera()
+      {showLandingPage ? (
+        renderLandingPage()
       ) : (
         <>
-          <FlatList
-            data={selectedImages}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={[styles.imageContainer, { width: screenWidth, height: screenWidth }]}
-                onPress={() => selectImage(index)}
-              >
-                {item.type === 'photo' ? (
-                  <Image
-                    style={[
-                      styles.image,
-                      index === selectedImageIndex && styles.selectedImage,
-                      { width: '100%', height: '100%' },
-                    ]}
-                    source={{ uri: item.uri }}
-                  />
-                ) : (
-                  <Text style={styles.videoText}>Video</Text>
+          {isCameraMode ? (
+            renderCamera()
+          ) : (
+            <>
+              <FlatList
+                data={selectedImages}
+                renderItem={({ item, index }) => (
+                  <TouchableOpacity
+                    style={[styles.imageContainer, { width: screenWidth, height: screenWidth }]}
+                    onPress={() => selectImage(index)}
+                  >
+                    {item.type === 'photo' ? (
+                      <Image
+                        style={[
+                          styles.image,
+                          index === selectedImageIndex && styles.selectedImage,
+                          { width: '100%', height: '100%' },
+                        ]}
+                        source={{ uri: item.uri }}
+                      />
+                    ) : (
+                      <Text style={styles.videoText}>Video</Text>
+                    )}
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.id.toString()}
-            ListEmptyComponent={<Text>No media found</Text>}
-            onScroll={onLargeListScroll}
-            scrollEventThrottle={16}
-          />
-          <FlatList
-            ref={thumbnailListRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={selectedImages}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.thumbnailContainer, { width: thumbnailWidth, height: thumbnailWidth }]}
-                onPress={() => selectImage(item.id)}
-              >
-                {item.type === 'photo' ? (
-                  <Image style={[styles.thumbnail, { width: '100%', height: '100%' }]} source={{ uri: item.thumbnailUri }} />
-                ) : (
-                  <Text style={styles.videoText}>Video</Text>
+                keyExtractor={(item) => item.id.toString()}
+                ListEmptyComponent={<Text>No media found</Text>}
+                onScroll={onLargeListScroll}
+                scrollEventThrottle={16}
+              />
+              <FlatList
+                ref={thumbnailListRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={selectedImages}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.thumbnailContainer, { width: thumbnailWidth, height: thumbnailWidth }]}
+                    onPress={() => selectImage(item.id)}
+                  >
+                    {item.type === 'photo' ? (
+                      <Image style={[styles.thumbnail, { width: '100%', height: '100%' }]} source={{ uri: item.thumbnailUri }} />
+                    ) : (
+                      <Text style={styles.videoText}>Video</Text>
+                    )}
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.id.toString()}
-            ListEmptyComponent={<Text>No media found</Text>}
-          />
+                keyExtractor={(item) => item.id.toString()}
+                ListEmptyComponent={<Text>No media found</Text>}
+              />
+            </>
+          )}
+          <TouchableOpacity style={styles.button} onPress={switchMode}>
+            <Text style={styles.buttonText}>{isCameraMode ? 'Exit Camera' : 'Open Camera'}</Text>
+          </TouchableOpacity>
         </>
       )}
-      <TouchableOpacity style={styles.button} onPress={switchMode}>
-        <Text style={styles.buttonText}>{isCameraMode ? 'Exit Camera' : 'Open Camera'}</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -313,5 +343,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  landingPageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  landingPageBackground: {
+    flex: 1,
+    resizeMode: 'cover',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  landingPageText: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    fontStyle: 'italic',
+    marginBottom: 30,
+    color: 'white',
+  },
+  startButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: 'skyblue',
+    borderRadius: 10,
+  },
+  startButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
   },
 });
