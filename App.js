@@ -9,7 +9,7 @@ import FlipCard from 'react-native-flip-card';
 
 const db = SQLite.openDatabase('mydatabase.db');
 
-const API_KEY = 'YOUR_PIXELS_API_KEY';
+const API_KEY = '4NvbKc0C2mimNP8lTUQtF01taGk7H2znVMCgDpLUGbctbqrpV2h2Jh0y';
 
 // Custom hook to run a function at a regular interval
 function useInterval(callback, delay) {
@@ -78,7 +78,7 @@ export default function App() {
     try {
       const response = await axios.get('https://api.pexels.com/v1/curated', {
         headers: {
-          Authorization: API_KEY,
+          Authorization: '4NvbKc0C2mimNP8lTUQtF01taGk7H2znVMCgDpLUGbctbqrpV2h2Jh0y',
         },
       });
       const images = response.data.photos.map((photo) => ({
